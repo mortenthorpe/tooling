@@ -1,0 +1,870 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Count-up timer</title>
+<style>
+  :root {
+    --lit: #3dff6a;
+    --dim: rgba(61, 255, 106, 0.075);
+    --ink: #7fffa0;
+    --muted: rgba(127, 255, 160, 0.45);
+    --rule: rgba(61, 255, 106, 0.22);
+    --digit-h: min(42vh, 20vw);
+    --digit-w: calc(var(--digit-h) * 0.56);
+    --digit-gap: calc(var(--digit-h) * 0.09);
+    --pulse-scale: 1.16;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body { height: 100%; }
+
+  body {
+    margin: 0;
+    background: #000;
+    color: var(--ink);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "DejaVu Sans Mono", monospace;
+    font-size: 15px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---------- readout ---------- */
+
+  .stage {
+    flex: 1 1 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: calc(var(--digit-h) * 0.10);
+    min-height: 0;
+    padding: 2vh 2vw;
+  }
+
+  .readout {
+    display: flex;
+    gap: var(--digit-gap);
+    transform-origin: center center;
+    will-change: transform;
+  }
+
+  .readout.is-pulsing { animation: pulse 480ms ease-in-out infinite alternate; }
+
+  @keyframes pulse {
+    from { transform: scale(1); }
+    to   { transform: scale(var(--pulse-scale)); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .readout.is-pulsing { animation: none; transform: scale(var(--pulse-scale)); }
+  }
+
+  .digit { position: relative; width: var(--digit-w); height: var(--digit-h); }
+
+  .seg { position: absolute; background: var(--dim); }
+
+  .seg.is-on {
+    background: var(--lit);
+    box-shadow: 0 0 calc(var(--digit-h) * 0.05) rgba(61, 255, 106, 0.55);
+  }
+
+  .seg.h {
+    left: 9%; width: 82%; height: 11%;
+    clip-path: polygon(0 50%, 9% 0, 91% 0, 100% 50%, 91% 100%, 9% 100%);
+  }
+
+  .seg.v {
+    width: 11%; height: 44%;
+    clip-path: polygon(50% 0, 100% 7%, 100% 93%, 50% 100%, 0 93%, 0 7%);
+  }
+
+  .seg-a { top: 0.5%; }
+  .seg-g { top: 44.5%; }
+  .seg-d { top: 88.5%; }
+  .seg-f { left: 1%; top: 3%; }
+  .seg-b { right: 1%; top: 3%; }
+  .seg-e { left: 1%; top: 53%; }
+  .seg-c { right: 1%; top: 53%; }
+
+  .caption {
+    display: flex;
+    align-items: baseline;
+    gap: 1.4em;
+    letter-spacing: 0.32em;
+    font-size: clamp(11px, 1.1vw, 15px);
+    color: var(--muted);
+  }
+
+  .caption b { font-weight: 400; color: var(--lit); letter-spacing: 0.2em; }
+
+  .marks { display: flex; gap: 0.5em; flex-wrap: wrap; justify-content: center; }
+
+  .mark {
+    border: 1px solid var(--rule);
+    padding: 0.25em 0.7em;
+    font-size: clamp(11px, 1.05vw, 14px);
+    color: var(--muted);
+    opacity: 0.6;
+  }
+
+  .mark.is-passed { opacity: 0.25; }
+
+  .mark.is-active {
+    opacity: 1;
+    color: #001b06;
+    background: var(--lit);
+    box-shadow: 0 0 18px rgba(61, 255, 106, 0.5);
+  }
+
+  /* ---------- settings ---------- */
+
+  .panel {
+    flex: 0 0 auto;
+    border-top: 1px solid var(--rule);
+    padding: 14px clamp(12px, 3vw, 32px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 14px 20px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 5px; }
+
+  .field label { font-size: 11px; letter-spacing: 0.14em; color: var(--muted); }
+
+  .field input {
+    width: 6.5em;
+    background: #000;
+    border: 1px solid var(--rule);
+    color: var(--lit);
+    font: inherit;
+    font-size: 15px;
+    padding: 6px 8px;
+    text-align: right;
+  }
+
+  .field input:focus-visible { outline: 2px solid var(--lit); outline-offset: 1px; }
+  .field input:disabled { color: var(--muted); border-color: rgba(61, 255, 106, 0.1); }
+
+  .group { display: flex; gap: 10px; flex-wrap: wrap; }
+
+  .field-check { justify-content: flex-end; }
+
+  .field-check label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    letter-spacing: 0.04em;
+    color: var(--ink);
+    cursor: pointer;
+    padding-bottom: 7px;
+  }
+
+  .field-check input {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--lit);
+    cursor: pointer;
+  }
+
+  .field-check input:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
+
+  .actions { display: flex; gap: 10px; margin-left: auto; }
+
+  button {
+    background: #000;
+    border: 1px solid var(--lit);
+    color: var(--lit);
+    font: inherit;
+    font-size: 15px;
+    letter-spacing: 0.12em;
+    padding: 9px 22px;
+    cursor: pointer;
+  }
+
+  button:hover:not(:disabled) { background: rgba(61, 255, 106, 0.12); }
+  button:focus-visible { outline: 2px solid var(--lit); outline-offset: 2px; }
+  button:disabled { border-color: var(--rule); color: var(--muted); cursor: default; }
+
+  .note { flex: 1 1 100%; font-size: 12px; color: var(--muted); min-height: 1.2em; }
+  .note.is-error { color: #ff6b5e; }
+
+  @media (max-width: 720px) {
+    :root { --digit-h: min(30vh, 26vw); }
+    .actions { margin-left: 0; width: 100%; }
+    .actions button { flex: 1; }
+  }
+</style>
+</head>
+<body>
+
+  <main class="stage">
+    <div class="readout" id="readout" role="timer" aria-live="off"></div>
+    <p class="caption"><span id="direction">seconds elapsed</span><b id="status">ready</b></p>
+    <div class="marks" id="marks"></div>
+  </main>
+
+  <form class="panel" id="settings" autocomplete="off">
+    <div class="field">
+      <label for="total">Total duration</label>
+      <input type="number" id="total" min="1" max="3600" step="1" value="120">
+    </div>
+
+    <div class="group" id="markFields">
+      <div class="field">
+        <label for="mark1">Pulse at 1</label>
+        <input type="number" id="mark1" min="0" step="1" value="30">
+      </div>
+      <div class="field">
+        <label for="mark2">Pulse at 2</label>
+        <input type="number" id="mark2" min="0" step="1" value="45">
+      </div>
+      <div class="field">
+        <label for="mark3">Pulse at 3</label>
+        <input type="number" id="mark3" min="0" step="1" value="60">
+      </div>
+      <div class="field">
+        <label for="mark4">Pulse at 4</label>
+        <input type="number" id="mark4" min="0" step="1" value="90">
+      </div>
+      <div class="field">
+        <label for="mark5">Pulse at 5</label>
+        <input type="number" id="mark5" min="0" step="1" value="105">
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="window">Pulse window ±</label>
+      <input type="number" id="window" min="0.5" max="30" step="0.5" value="2">
+    </div>
+
+    <div class="field field-check">
+      <label for="countdown"><input type="checkbox" id="countdown"> Count down instead of up</label>
+    </div>
+
+    <div class="actions">
+      <button type="submit" id="start">Start</button>
+      <button type="button" id="reset">Reset</button>
+    </div>
+
+    <p class="note" id="note">Counts up from 0 by default. Pulse marks fire when the readout is within 2 s of them. Press the spacebar to start.</p>
+  </form>
+
+<script>
+'use strict';
+
+/* ------------------------------------------------------------------
+   Seven-segment data. Order is a,b,c,d,e,f,g.
+------------------------------------------------------------------ */
+var SEGMENT_KEYS = ['a', 'b', 'c', 'd', 'e', 'f', 'g'];
+var HORIZONTAL_SEGMENTS = ['a', 'd', 'g'];
+var DIGIT_PATTERNS = [
+  '1111110', '0110000', '1101101', '1111001', '0110011',
+  '1011011', '1011111', '1110000', '1111111', '1111011'
+];
+
+/* ------------------------------------------------------------------
+   Direction strategies. Each one answers the same three questions:
+   what value is being tracked, what goes on the readout, and how the
+   caption reads. Adding a third direction means adding an object
+   here, not editing the controller.
+------------------------------------------------------------------ */
+var EPSILON = 1e-9;
+
+function CountUpDirection() {}
+
+CountUpDirection.prototype.name = 'up';
+CountUpDirection.prototype.caption = 'seconds elapsed';
+
+CountUpDirection.prototype.trackedSeconds = function (elapsedSeconds, totalSeconds) {
+  return elapsedSeconds;
+};
+
+CountUpDirection.prototype.displaySeconds = function (elapsedSeconds, totalSeconds) {
+  var value = Math.floor(elapsedSeconds + EPSILON);
+  return value > totalSeconds ? totalSeconds : value;
+};
+
+CountUpDirection.prototype.hasPassed = function (trackedSeconds, mark) {
+  return trackedSeconds > mark;
+};
+
+function CountDownDirection() {}
+
+CountDownDirection.prototype.name = 'down';
+CountDownDirection.prototype.caption = 'seconds remaining';
+
+CountDownDirection.prototype.trackedSeconds = function (elapsedSeconds, totalSeconds) {
+  return totalSeconds - elapsedSeconds;
+};
+
+CountDownDirection.prototype.displaySeconds = function (elapsedSeconds, totalSeconds) {
+  var value = Math.ceil(totalSeconds - elapsedSeconds - EPSILON);
+  return value <= 0 ? 0 : value;
+};
+
+CountDownDirection.prototype.hasPassed = function (trackedSeconds, mark) {
+  return trackedSeconds < mark;
+};
+
+/* ------------------------------------------------------------------
+   Configuration value object.
+------------------------------------------------------------------ */
+function TimerConfig(totalSeconds, markSeconds, pulseWindowSeconds, direction) {
+  this.totalSeconds = totalSeconds;
+  this.markSeconds = markSeconds;
+  this.pulseWindowSeconds = pulseWindowSeconds;
+  this.direction = direction;
+}
+
+TimerConfig.DEFAULTS = { total: 120, marks: [30, 45, 60, 90, 105], window: 2, countDown: false };
+
+TimerConfig.defaults = function () {
+  var marks = [];
+  for (var i = 0; i < TimerConfig.DEFAULTS.marks.length; i++) {
+    marks.push(TimerConfig.DEFAULTS.marks[i]);
+  }
+  return new TimerConfig(
+    TimerConfig.DEFAULTS.total,
+    marks,
+    TimerConfig.DEFAULTS.window,
+    new CountUpDirection()
+  );
+};
+
+TimerConfig.prototype.digitCount = function () {
+  var length = String(this.totalSeconds).length;
+  return length < 2 ? 2 : length;
+};
+
+TimerConfig.prototype.idleTracked = function () {
+  return this.direction.trackedSeconds(0, this.totalSeconds);
+};
+
+TimerConfig.prototype.idleDisplay = function () {
+  return this.direction.displaySeconds(0, this.totalSeconds);
+};
+
+TimerConfig.prototype.finalTracked = function () {
+  return this.direction.trackedSeconds(this.totalSeconds, this.totalSeconds);
+};
+
+TimerConfig.prototype.finalDisplay = function () {
+  return this.direction.displaySeconds(this.totalSeconds, this.totalSeconds);
+};
+
+/* ------------------------------------------------------------------
+   One seven-segment digit: owns its own DOM and nothing else.
+------------------------------------------------------------------ */
+function SevenSegmentDigit(doc) {
+  this.element = doc.createElement('div');
+  this.element.className = 'digit';
+  this.segments = {};
+  this.value = null;
+
+  for (var i = 0; i < SEGMENT_KEYS.length; i++) {
+    var key = SEGMENT_KEYS[i];
+    var orientation = HORIZONTAL_SEGMENTS.indexOf(key) === -1 ? 'v' : 'h';
+    var seg = doc.createElement('div');
+    seg.className = 'seg ' + orientation + ' seg-' + key;
+    this.element.appendChild(seg);
+    this.segments[key] = seg;
+  }
+}
+
+SevenSegmentDigit.prototype.setValue = function (digit) {
+  if (this.value === digit) {
+    return;
+  }
+  this.value = digit;
+  var pattern = DIGIT_PATTERNS[digit];
+  for (var i = 0; i < SEGMENT_KEYS.length; i++) {
+    this.segments[SEGMENT_KEYS[i]].classList.toggle('is-on', pattern.charAt(i) === '1');
+  }
+};
+
+/* ------------------------------------------------------------------
+   The readout: turns a number into lit segments.
+------------------------------------------------------------------ */
+function SevenSegmentDisplay(container, doc) {
+  this.container = container;
+  this.doc = doc;
+  this.digits = [];
+  this.lastRendered = null;
+}
+
+SevenSegmentDisplay.prototype.setDigitCount = function (count) {
+  if (this.digits.length === count) {
+    return;
+  }
+  this.container.innerHTML = '';
+  this.digits = [];
+  for (var i = 0; i < count; i++) {
+    var digit = new SevenSegmentDigit(this.doc);
+    this.container.appendChild(digit.element);
+    this.digits.push(digit);
+  }
+  this.lastRendered = null;
+};
+
+SevenSegmentDisplay.prototype.render = function (value) {
+  if (this.lastRendered === value) {
+    return;
+  }
+  this.lastRendered = value;
+
+  var text = String(value);
+  while (text.length < this.digits.length) {
+    text = '0' + text;
+  }
+  if (text.length > this.digits.length) {
+    this.setDigitCount(text.length);
+  }
+  for (var i = 0; i < this.digits.length; i++) {
+    this.digits[i].setValue(Number(text.charAt(i)));
+  }
+  this.container.setAttribute('aria-label', value + ' seconds');
+};
+
+/* ------------------------------------------------------------------
+   Elapsed time source, independent of any rendering.
+------------------------------------------------------------------ */
+function Stopwatch(nowFn) {
+  this.now = nowFn;
+  this.startedAt = null;
+  this.running = false;
+}
+
+Stopwatch.prototype.start = function () {
+  this.startedAt = this.now();
+  this.running = true;
+};
+
+Stopwatch.prototype.stop = function () {
+  this.running = false;
+};
+
+Stopwatch.prototype.reset = function () {
+  this.startedAt = null;
+  this.running = false;
+};
+
+Stopwatch.prototype.elapsedSeconds = function () {
+  if (this.startedAt === null) {
+    return 0;
+  }
+  return (this.now() - this.startedAt) / 1000;
+};
+
+/* ------------------------------------------------------------------
+   Decides whether the readout should be pulsing right now.
+   Swap this for another policy without touching the controller.
+------------------------------------------------------------------ */
+function MarkPulsePolicy(markSeconds, windowSeconds) {
+  this.marks = markSeconds;
+  this.window = windowSeconds;
+}
+
+MarkPulsePolicy.prototype.activeMark = function (elapsedSeconds) {
+  for (var i = 0; i < this.marks.length; i++) {
+    var mark = this.marks[i];
+    if (elapsedSeconds >= mark - this.window && elapsedSeconds <= mark + this.window) {
+      return mark;
+    }
+  }
+  return null;
+};
+
+/* ------------------------------------------------------------------
+   View: every DOM effect apart from the digits themselves.
+------------------------------------------------------------------ */
+function TimerView(elements, display) {
+  this.elements = elements;
+  this.display = display;
+  this.markNodes = [];
+  this.pulsing = false;
+  this.direction = new CountUpDirection();
+}
+
+TimerView.prototype.applyConfig = function (config) {
+  this.direction = config.direction;
+  this.elements.direction.textContent = config.direction.caption;
+  this.display.setDigitCount(config.digitCount());
+  this.renderMarks(config.markSeconds);
+};
+
+TimerView.prototype.renderMarks = function (marks) {
+  this.elements.marks.innerHTML = '';
+  this.markNodes = [];
+  for (var i = 0; i < marks.length; i++) {
+    var node = document.createElement('span');
+    node.className = 'mark';
+    node.textContent = marks[i] + ' s';
+    this.elements.marks.appendChild(node);
+    this.markNodes.push({ seconds: marks[i], node: node });
+  }
+};
+
+TimerView.prototype.setValue = function (seconds) {
+  this.display.render(seconds);
+};
+
+TimerView.prototype.setPulsing = function (shouldPulse) {
+  if (this.pulsing === shouldPulse) {
+    return;
+  }
+  this.pulsing = shouldPulse;
+  this.elements.readout.classList.toggle('is-pulsing', shouldPulse);
+};
+
+TimerView.prototype.updateMarks = function (trackedSeconds, activeMark) {
+  for (var i = 0; i < this.markNodes.length; i++) {
+    var entry = this.markNodes[i];
+    var isActive = activeMark !== null && entry.seconds === activeMark;
+    entry.node.classList.toggle('is-active', isActive);
+    entry.node.classList.toggle(
+      'is-passed',
+      !isActive && this.direction.hasPassed(trackedSeconds, entry.seconds)
+    );
+  }
+};
+
+TimerView.prototype.setStatus = function (text) {
+  this.elements.status.textContent = text;
+};
+
+TimerView.prototype.setNote = function (text, isError) {
+  this.elements.note.textContent = text;
+  this.elements.note.classList.toggle('is-error', isError === true);
+};
+
+TimerView.prototype.setRunning = function (isRunning) {
+  this.elements.start.disabled = isRunning;
+  for (var i = 0; i < this.elements.inputs.length; i++) {
+    this.elements.inputs[i].disabled = isRunning;
+  }
+};
+
+/* ------------------------------------------------------------------
+   Reads and writes the settings form. Knows nothing about timing.
+------------------------------------------------------------------ */
+function SettingsForm(totalInput, markInputs, windowInput, countDownInput) {
+  this.totalInput = totalInput;
+  this.markInputs = markInputs;
+  this.windowInput = windowInput;
+  this.countDownInput = countDownInput;
+}
+
+SettingsForm.prototype.read = function () {
+  var total = Number(this.totalInput.value);
+  if (!isFinite(total) || total < 1) {
+    throw new Error('Total duration must be at least 1 second.');
+  }
+  total = Math.round(total);
+
+  var pulseWindow = Number(this.windowInput.value);
+  if (!isFinite(pulseWindow) || pulseWindow <= 0) {
+    throw new Error('Pulse window must be greater than 0 seconds.');
+  }
+
+  var marks = [];
+  for (var i = 0; i < this.markInputs.length; i++) {
+    var raw = this.markInputs[i].value.trim();
+    if (raw === '') {
+      continue;
+    }
+    var value = Number(raw);
+    if (!isFinite(value) || value < 0) {
+      throw new Error('Pulse mark ' + (i + 1) + ' must be 0 or more.');
+    }
+    value = Math.round(value);
+    if (value > total) {
+      throw new Error('Pulse mark ' + (i + 1) + ' (' + value + ' s) is past the total duration.');
+    }
+    if (marks.indexOf(value) === -1) {
+      marks.push(value);
+    }
+  }
+  marks.sort(function (a, b) { return a - b; });
+
+  var direction = this.countDownInput.checked ? new CountDownDirection() : new CountUpDirection();
+
+  return new TimerConfig(total, marks, pulseWindow, direction);
+};
+
+SettingsForm.prototype.write = function (config) {
+  this.totalInput.value = String(config.totalSeconds);
+  this.windowInput.value = String(config.pulseWindowSeconds);
+  this.countDownInput.checked = config.direction.name === 'down';
+  for (var i = 0; i < this.markInputs.length; i++) {
+    this.markInputs[i].value = i < config.markSeconds.length ? String(config.markSeconds[i]) : '';
+  }
+};
+
+/* ------------------------------------------------------------------
+   Controller: wires the pieces together and drives the frame loop.
+------------------------------------------------------------------ */
+function TimerController(stopwatch, view, form) {
+  this.stopwatch = stopwatch;
+  this.view = view;
+  this.form = form;
+  this.config = TimerConfig.defaults();
+  this.policy = new MarkPulsePolicy(this.config.markSeconds, this.config.pulseWindowSeconds);
+  this.frameHandle = null;
+  this.tick = this.tick.bind(this);
+}
+
+TimerController.prototype.applyConfig = function (config) {
+  this.config = config;
+  this.policy = new MarkPulsePolicy(config.markSeconds, config.pulseWindowSeconds);
+  this.view.applyConfig(config);
+};
+
+TimerController.prototype.showIdleState = function () {
+  this.view.setValue(this.config.idleDisplay());
+  this.view.setPulsing(false);
+  this.view.updateMarks(this.config.idleTracked(), null);
+  this.view.setStatus('ready');
+  this.view.setRunning(false);
+};
+
+TimerController.prototype.start = function () {
+  var config;
+  try {
+    config = this.form.read();
+  } catch (error) {
+    this.view.setNote(error.message, true);
+    return;
+  }
+
+  this.cancelFrame();
+  this.applyConfig(config);
+  this.view.setNote(
+    (config.direction.name === 'down' ? 'Counting down from ' : 'Counting up to ') +
+    config.totalSeconds + ' s. Pulse runs ' + config.pulseWindowSeconds +
+    ' s either side of each mark on the readout.',
+    false
+  );
+  this.view.setValue(config.idleDisplay());
+  this.view.updateMarks(config.idleTracked(), null);
+  this.view.setStatus('running');
+  this.view.setRunning(true);
+  this.stopwatch.start();
+  this.frameHandle = window.requestAnimationFrame(this.tick);
+};
+
+TimerController.prototype.reset = function () {
+  this.cancelFrame();
+  this.stopwatch.reset();
+  var defaults = TimerConfig.defaults();
+  this.form.write(defaults);
+  this.applyConfig(defaults);
+  this.showIdleState();
+  this.view.setNote('Reset to defaults: counting up to 120 s, pulses at 30 / 45 / 60 / 90 / 105 s.', false);
+};
+
+TimerController.prototype.finish = function () {
+  this.cancelFrame();
+  this.stopwatch.stop();
+  this.view.setValue(this.config.finalDisplay());
+  this.view.setPulsing(false);
+  this.view.updateMarks(this.config.finalTracked(), null);
+  this.view.setStatus('finished');
+  this.view.setRunning(false);
+};
+
+TimerController.prototype.cancelFrame = function () {
+  if (this.frameHandle !== null) {
+    window.cancelAnimationFrame(this.frameHandle);
+    this.frameHandle = null;
+  }
+};
+
+TimerController.prototype.tick = function () {
+  var elapsed = this.stopwatch.elapsedSeconds();
+  if (elapsed >= this.config.totalSeconds) {
+    this.finish();
+    return;
+  }
+
+  var tracked = this.config.direction.trackedSeconds(elapsed, this.config.totalSeconds);
+  var activeMark = this.policy.activeMark(tracked);
+  this.view.setValue(this.config.direction.displaySeconds(elapsed, this.config.totalSeconds));
+  this.view.setPulsing(activeMark !== null);
+  this.view.updateMarks(tracked, activeMark);
+  this.frameHandle = window.requestAnimationFrame(this.tick);
+};
+
+/* ------------------------------------------------------------------
+   Keyboard shortcut: one press of the spacebar starts the timer.
+   The spacebar belongs to the timer alone, so it is taken away from
+   the controls it would otherwise operate — the checkbox must not
+   toggle and the buttons must not activate. Only genuine text entry
+   keeps its own spacebar, since a space is a character there.
+   Depends only on something that exposes start(), so it can drive
+   any startable object, not just this controller.
+------------------------------------------------------------------ */
+function SpacebarStartShortcut(startable, isBusyFn) {
+  this.startable = startable;
+  this.isBusy = isBusyFn;
+  this.swallowNextKeyUp = false;
+  this.handleKeyDown = this.handleKeyDown.bind(this);
+  this.handleKeyUp = this.handleKeyUp.bind(this);
+}
+
+SpacebarStartShortcut.KEY_NAMES = [' ', 'Space', 'Spacebar'];
+SpacebarStartShortcut.KEY_CODE = 32;
+SpacebarStartShortcut.TEXT_ENTRY_TYPES = ['text', 'search', 'email', 'url', 'tel', 'password'];
+
+SpacebarStartShortcut.prototype.attach = function (doc) {
+  doc.addEventListener('keydown', this.handleKeyDown);
+  doc.addEventListener('keyup', this.handleKeyUp);
+};
+
+SpacebarStartShortcut.prototype.isSpacebar = function (event) {
+  for (var i = 0; i < SpacebarStartShortcut.KEY_NAMES.length; i++) {
+    var name = SpacebarStartShortcut.KEY_NAMES[i];
+    if (event.key === name || event.code === name) {
+      return true;
+    }
+  }
+  return event.keyCode === SpacebarStartShortcut.KEY_CODE;
+};
+
+SpacebarStartShortcut.prototype.isTextEntry = function (node) {
+  if (!node || !node.tagName) {
+    return false;
+  }
+  if (node.isContentEditable || node.tagName === 'TEXTAREA') {
+    return true;
+  }
+  if (node.tagName !== 'INPUT') {
+    return false;
+  }
+  var type = String(node.type || 'text').toLowerCase();
+  for (var i = 0; i < SpacebarStartShortcut.TEXT_ENTRY_TYPES.length; i++) {
+    if (type === SpacebarStartShortcut.TEXT_ENTRY_TYPES[i]) {
+      return true;
+    }
+  }
+  return false;
+};
+
+SpacebarStartShortcut.prototype.handleKeyDown = function (event) {
+  if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) {
+    return;
+  }
+  if (!this.isSpacebar(event) || this.isTextEntry(event.target)) {
+    return;
+  }
+
+  // Blocks the page scroll, the checkbox toggle and any button press.
+  event.preventDefault();
+  this.swallowNextKeyUp = true;
+
+  if (this.isBusy()) {
+    return;
+  }
+  this.startable.start();
+};
+
+SpacebarStartShortcut.prototype.handleKeyUp = function (event) {
+  if (!this.swallowNextKeyUp) {
+    return;
+  }
+  this.swallowNextKeyUp = false;
+  if (this.isSpacebar(event)) {
+    // Some browsers fire the toggle or click on key up, not key down.
+    event.preventDefault();
+  }
+};
+
+/* ------------------------------------------------------------------
+   Composition root.
+------------------------------------------------------------------ */
+(function bootstrap() {
+  var markInputs = [];
+  for (var i = 1; i <= 5; i++) {
+    markInputs.push(document.getElementById('mark' + i));
+  }
+
+  var totalInput = document.getElementById('total');
+  var windowInput = document.getElementById('window');
+  var countDownInput = document.getElementById('countdown');
+
+  var inputs = [totalInput, windowInput, countDownInput];
+  for (var j = 0; j < markInputs.length; j++) {
+    inputs.push(markInputs[j]);
+  }
+
+  var elements = {
+    readout: document.getElementById('readout'),
+    marks: document.getElementById('marks'),
+    status: document.getElementById('status'),
+    direction: document.getElementById('direction'),
+    note: document.getElementById('note'),
+    start: document.getElementById('start'),
+    inputs: inputs
+  };
+
+  var display = new SevenSegmentDisplay(elements.readout, document);
+  var view = new TimerView(elements, display);
+  var form = new SettingsForm(totalInput, markInputs, windowInput, countDownInput);
+  var stopwatch = new Stopwatch(function () { return window.performance.now(); });
+  var controller = new TimerController(stopwatch, view, form);
+
+  controller.applyConfig(TimerConfig.defaults());
+  controller.showIdleState();
+
+  var resetButton = document.getElementById('reset');
+
+  document.getElementById('settings').addEventListener('submit', function (event) {
+    event.preventDefault();
+    controller.start();
+  });
+
+  resetButton.addEventListener('click', function () {
+    controller.reset();
+  });
+
+  // A mouse click leaves focus on the button, which would swallow the
+  // spacebar. Hand focus back to the page after pointer clicks only.
+  var pointerBlurTargets = [elements.start, resetButton];
+  for (var k = 0; k < pointerBlurTargets.length; k++) {
+    pointerBlurTargets[k].addEventListener('click', function (event) {
+      if (event.detail > 0) {
+        event.currentTarget.blur();
+      }
+    });
+  }
+
+  new SpacebarStartShortcut(controller, function () {
+    return stopwatch.running;
+  }).attach(document);
+
+  // Keep the readout in step with the form while the timer is idle.
+  function previewSettings() {
+    if (stopwatch.running) {
+      return;
+    }
+    try {
+      controller.applyConfig(form.read());
+      controller.showIdleState();
+      view.setNote('Ready.', false);
+    } catch (error) {
+      view.setNote(error.message, true);
+    }
+  }
+
+  totalInput.addEventListener('change', previewSettings);
+  countDownInput.addEventListener('change', previewSettings);
+}());
+</script>
+
+</body>
+</html>
